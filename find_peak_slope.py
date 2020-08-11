@@ -19,51 +19,69 @@ def fft(signal,nfft):
     return t4
 
 def dev(x,n=1):
-    # derivative of x: y[i] = y[i+1:i+n+1].sum() -  y[i-n:n].sum()
+    # this function calculate derivative/slope x' of x, 
+    # current algorithm use `(sum of right n point) - (sum of left n point)`
+    # i.e. : x'[i] = x[i+1:i+n+1].sum() -  x[i-n:n].sum()
+    # this algorithm is equivalent to smooth with n point flat kernel then get smoothed[i+n]-smoothed[i-n]
+    # when n is too small, it may miss some low slope signal
+    # when n is too large, narrow band signal may be flatten
+    # TODO: find a more accurate and noise insensitive way to calculate slope
     y = np.zeros(x.size,dtype=x.dtype)
     cx = np.cumsum(x)
-    dcx = cx[n:]-cx[:-n] ## cx[n:]-cx[:-n] is equivalent to mySmooth(x,n,0)
+    dcx = cx[n:]-cx[:-n] # cx[n:]-cx[:-n] is equivalent to mySmooth(x,n,0)
     y[n+1:-n] = dcx[n+1:] - dcx[:-n-1]
     y[n] = dcx[n] - cx[n-1]
     return y
 
-def filter_extremum(x,ploc,vloc):
-    # this function choose rising edge with maximum magnitude slope between two falling edge
-    # and choose falling edge with minimum magnitude slope between two rising edge
-    if len(ploc)==0 or len(vloc)==0:
-        raise ValueError("input ploc and vloc must not be empty")
-    ploc=ploc[::-1].tolist() # this transform is for following pop() operation
-    vloc=vloc[::-1].tolist()
-    pl = ploc.pop()
-    vl = vloc.pop()
-    p = x[pl]
-    v = x[vl]
-    new_peak = [pl]
-    new_pits = [vl]
-    while len(ploc)>0 and len(vloc)>0: 
-        if pl>vl:            
-            if x[vl]<v:
-                new_pits[-1] = vl 
-                v = x[vl]
-            vl = vloc.pop()
-            if vl>pl:
-                new_pits.append(vl)
-                v=x[vl]
-        else:            
-            if x[pl]>p:
-                new_peak[-1] = pl
-                p = x[pl]
-            pl = ploc.pop()
-            if pl>vl:
-                new_peak.append(pl)
-                p=x[pl]
-    if len(ploc)==0 and len(vloc)>0:
-        new_pits[-1] = vloc[x[vloc].argmin()]
-    elif len(ploc)>0 and len(vloc)==0:
-        new_peak[-1] = ploc[x[ploc].argmax()]
-    while new_pits[0] < new_peak[0]:
-        new_pits.pop(0)
-    return np.array(new_peak),np.array(new_pits)    
+def get_edge(x,th,thp):
+    # Iterate along x once, so it is O(n). It's actually a state machine
+    # state "Nethier", -th+thp < x[i] < th-thp <= this `thp` to prevent noise in x from creating fake peak
+    # state "Rising", x[i] > th
+    # state "Falling", x[i] < -th
+    # state transfer: 
+    # "N"->"N", "N"->"R" and "N"->"F": pass
+    # "R"->"R": update maxPeak; "F"->"F": update minPeak
+    # "R"->"N", last rising edge ends, append maxPeak location then reset maxPeak
+    # "F"->"N", last falling edge ends, append minPeak location then reset minPeak
+    # when append maxPeak, `len(ploc)-len(vloc)==1` means two rising edge in a row, choose last one
+    # when append minPeak, `len(ploc)=len(vloc)` means two falling edge in a row, keep first one
+    ploc=[]
+    vloc=[]
+    maxPeak = 0
+    minPeak = 0
+    pl = 0
+    vl = 0
+    current = 'neither'
+    for i,d in enumerate(x):
+        if d>th:
+            # print("R",i,d,maxPeak,pl)
+            current = 'rising'
+            if d>maxPeak:
+                maxPeak = d
+                pl = i
+        elif d<-th:
+            # print("F",i,d,minPeak,vl)
+            current = 'falling'
+            if d<minPeak:
+                minPeak = d
+                vl = i
+        elif d<th-thp and d>-th+thp: # prevent noise in x from creating fake peak
+            if current == 'rising':
+                if len(ploc)-len(vloc)==1: # two rising edge
+                    # print("{:}=>{:}".format(ploc[-1],pl))
+                    ploc[-1] = pl # choose last one
+                else:
+                    # print("append pl ",pl)
+                    ploc.append(pl)
+                maxPeak = 0
+            elif current == 'falling':
+                if len(ploc)-len(vloc)==1: # not two falling edge
+                    # print("append vl ",vl)
+                    vloc.append(vl) # keep first one
+                minPeak = 0
+            current = 'neither'
+    if len(ploc)-len(vloc)==1:ploc.pop()
+    return np.array(ploc),np.array(vloc)
 
 def sample2frequency(sm,new_peak,new_pits):
     npeak = len(new_peak)
@@ -90,7 +108,8 @@ def sample2frequency(sm,new_peak,new_pits):
     for i,(up,down) in enumerate(zip(new_peak,new_pits)):   
         max_frq[i] = up + sm[up:down].argmax()
         maxi = sm[max_frq[i]]
-        left_min = get_nearest_minimum(sm,up,'left')
+        # TODO: half_left/right not very accurate, nearest minimum is not best method to find height reference
+        left_min = get_nearest_minimum(sm,up,'left') 
         right_min = get_nearest_minimum(sm,down,'right')
         mini = max(sm[left_min],sm[right_min])
         height = (maxi+mini)/2
@@ -132,9 +151,8 @@ def find_peak_slope(sp,width,slope_th):
     # sp = np.concatenate([np.ones(width)*sp[0],sp,np.ones(width)*sp[-1]])
     sm = mySmooth(sp,width,n=1) # n control shape of smooth kernel (lager n, kernel is more like gaussian(bell) shape)
     dsp = dev(sp,width) # calculate derivative/slope
-    ploc = np.where(dsp>slope_th)[0] # slope > slope_th ==> rising edge 
-    vloc = np.where(dsp<-slope_th)[0] # slope < -slope_th ==> falling edge
-    new_peak,new_pits = filter_extremum(dsp,ploc,vloc) # find maximun/minimum slope point at rising/falling edge
+    new_peak,new_pits = get_edge(dsp,slope_th,slope_th/10)   
+    print(new_peak,new_pits)
     avg_frq,max_frq,dev_band,half_left,half_right,half_band = sample2frequency(sm,new_peak,new_pits)
     return sm,dsp,new_peak,new_pits,avg_frq,max_frq,dev_band,half_left,half_right,half_band
 
@@ -148,8 +166,8 @@ def find_peak_slope_from_rd(file,width,slope_th,nframe=10,pos=10):
         dev_band,half_left,half_right,half_band = find_peak_slope(sp,width,slope_th)
 
     # result representation
-    f = 1/nfft*2*fs/1e6 # using frequency as x-axis
-    # f = 1 # using sample points as x-axis
+    # f = 1/nfft*2*fs/1e6 # using frequency as x-axis
+    f = 1 # using sample points as x-axis
     plot_all(sp,sm,dsp,slope_th,new_peak,new_pits,avg_frq,max_frq,dev_band,half_left,half_right,f)
     df = pd.DataFrame({ 'avg_frq':avg_frq*f,'max_frq':max_frq*f,
                         'slope band':dev_band*f,
