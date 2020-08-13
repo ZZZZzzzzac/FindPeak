@@ -1,0 +1,1 @@
+D:\Software\MKL\MKL2020\compilers_and_libraries_2020.1.216\windows\bin\ipsxe-comp-vars.bat intel64 vs2019
