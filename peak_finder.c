@@ -13,7 +13,7 @@ int findBandInRange(double *x, double peakThreshold, int start, int end,int *pea
     while (j<end && x[j]>th) { j++; }
     if (i<start && j==end){ return 0; } 
     static int peakLen = 0;
-    if (init) {peakLen = 0;}
+    if (init) { peakLen = 0; }
     if (i>=start+MINBANDPTS) { 
         findBandInRange(x, peakThreshold, start, i, peaks, 0); 
     }
@@ -59,7 +59,7 @@ int main() {
         times[i] = (dsecnd()-tic)/1000;
         printf("%f, ",times[i]);        
     }
-    printf("using %f ms\n",(cblas_dasum(7,times,1))/7*1000);
+    printf("avg: using %f ms\n",(cblas_dasum(7,times,1))/7*1000);
     printf("Total peak: %d\n",peakLen/2);
     for (int i=0;i<peakLen/2;i++) {
         printf("%d  %d\n",ploc[i],vloc[i]);

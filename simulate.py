@@ -29,14 +29,14 @@ def squares(noise=0.1):
     x[10300:10400] += square(100,1,0)
     x[10500:10600] += square(100,1,50)
     x[10700:10800] += square(100,1,25)
-    return x,awgn(x,None,noise)
+    return awgn(x,None,noise)
 def stairs(noise=0.1):
     x = np.zeros(10000)
     x[1100:2000] = stair(900,1,0.1,alpha=100,ripple=0)
     x[2100:3000] = stair(900,0.4,1,alpha=200,ripple=0)
     x[3100:4000] = stair(900,1,1,alpha=30,ripple=0)
     x[4100:5000] = stair(900,1,1,alpha=300,ripple=0)
-    return x,awgn(x,None,noise)
+    return awgn(x,None,noise)
 def bells(noise=0.1):
     x = np.zeros(20000)
     x[1100:1300] = bell(200,1)
@@ -54,7 +54,7 @@ def bells(noise=0.1):
     x[11900:13000] = bell(1100,0.3)
     x[13100:15100] = bell(2000,0.3)
     x[15200:19000] = bell(3800,0.3)
-    return x,awgn(x,None,noise)
+    return awgn(x,None,noise)
 
 def random(noise=0.1):
     x = np.zeros(10000)
@@ -77,4 +77,4 @@ def random(noise=0.1):
             a = stair(n,h,np.random.rand(0,3),int(np.random.randint(0,w//2)))
         pos = np.random.randint(1000,9000-w)
         x[pos:pos+w] += a
-    return x,awgn(x,None,noise)
+    return awgn(x,None,noise)
