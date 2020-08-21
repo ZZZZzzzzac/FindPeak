@@ -27,25 +27,49 @@ int findBandInRange(double *x, double peakThreshold, int start, int end,int *pea
     return peakLen;
 }
 
+int findBandInRange2(int n, double *x, double peakThreshold, int *ploc, int *vloc) {
+    int idmax = 0, idmin = 0, len = 0, rising = -1;
+    double d;
+    for (int i=0;i<n;i++){
+        d = x[i];
+        if (d>x[idmax]) {
+            idmax = i;
+            while (d-x[idmin]>peakThreshold) {idmin++;}
+            rising = idmin;
+        }
+        if (d<x[idmin]) {
+            idmin = i;
+            while (x[idmax]-d>peakThreshold) {idmax++;}
+            if (rising>=0) {
+                int t = idmax-1;
+                while(t>rising && x[idmax]-x[t]<peakThreshold){t--;}
+                ploc[len] = t;
+                vloc[len++] = i;
+                rising = -1;
+            }
+        }
+    }
+    return len;
+}
+
 int main() {
     // parameter
     const char *filename = "test.dat";
-    MKL_INT width = 400;
-    double slope_th = 32.0;
-    // input log10(abs(fft result))
     FILE *file = fopen(filename,"rb");
     double *sp = mkl_malloc(LEN*sizeof(double),ALIGMENT);
     fread(sp,sizeof(double),LEN,file);
     fclose(file);
 
     int *peaks,*ploc,*vloc,peakLen;
-
     double times[7];
+    double th = 0.1;
+
+    // O(nlogn) implenment
     for (int i=0;i<7;i++){
         double tic=dsecnd();
         for (int j=0;j<1000;j++){
-            peaks = mkl_malloc(300*sizeof(int),ALIGMENT); // max stack size 300        
-            peakLen = findBandInRange(sp, 0.5, 0, LEN, peaks, 1);     
+            peaks = mkl_malloc(600*sizeof(int),ALIGMENT); // max stack size 300        
+            peakLen = findBandInRange(sp, th, 0, LEN, peaks, 1);     
             ploc = mkl_malloc(peakLen/2*sizeof(int),ALIGMENT);
             vloc = mkl_malloc(peakLen/2*sizeof(int),ALIGMENT);       
             for (int i=0;i<peakLen/2;i++){
@@ -59,11 +83,36 @@ int main() {
         times[i] = (dsecnd()-tic)/1000;
         printf("%f, ",times[i]);        
     }
-    printf("avg: using %f ms\n",(cblas_dasum(7,times,1))/7*1000);
+    printf("\navg: using %f ms\n",(cblas_dasum(7,times,1))/7*1000);
     printf("Total peak: %d\n",peakLen/2);
     for (int i=0;i<peakLen/2;i++) {
         printf("%d  %d\n",ploc[i],vloc[i]);
     }
+
+    // O(n) implenment
+    for (int i=0;i<7;i++){
+        double tic=dsecnd();
+        for (int j=0;j<1000;j++){             
+            ploc = mkl_malloc(300*sizeof(int),ALIGMENT);
+            vloc = mkl_malloc(300*sizeof(int),ALIGMENT);  
+            peakLen = findBandInRange2(LEN, sp, th, ploc, vloc);
+            mkl_free(ploc);
+            mkl_free(vloc);
+        }
+        times[i] = (dsecnd()-tic)/1000;
+        printf("%f, ",times[i]);        
+    }
+    printf("\navg: using %f ms\n",(cblas_dasum(7,times,1))/7*1000);
+    printf("Total peak: %d\n",peakLen);
+    for (int i=0;i<peakLen;i++) {
+        printf("%d  %d\n",ploc[i],vloc[i]);
+    }
+
+
+
+
+
+
     mkl_free(sp);
     return 0;
 }

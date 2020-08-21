@@ -52,3 +52,8 @@ def findBandInRange2(x,peakThreshold):
 def find_peak_value(x,th):
     ploc,vloc = findBandInRange(x,th,0,x.size)
     return np.array(ploc),np.array(vloc)
+
+@numba.njit()
+def get_local_maximum(x):
+    return np.array([i for i in range(1,x.size-1) if x[i]>x[i+1] and x[i]>x[i-1]])
+
