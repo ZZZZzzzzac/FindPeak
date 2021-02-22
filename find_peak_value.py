@@ -55,8 +55,7 @@ def findBandInRange2(x,peakThreshold):
     return ploc,vloc
 
 
-
-# @numba.njit
+@numba.njit
 def FindBandByValue(x,th):
     """two pointer algorithm,"""
     idmax = 0
@@ -67,10 +66,10 @@ def FindBandByValue(x,th):
         if d>xmax:
             idmax = i
             xmax = x[idmax]
-        if xmax-d>th:
+        elif xmax-d>th:
             if x[idmax-1]<xmax:                
                 rising = idmax
-                while x[idmax]-x[rising]<th:
+                while xmax-x[rising]<th:
                     rising -= 1   
                     if rising < rising_edge[-1]:
                         break
