@@ -1,8 +1,13 @@
 import numpy as np
 import numba
 
-@numba.njit()
+# algorithm in this file have same logic:
+# find a peak at location <i> on signal <x>, then find nearest left/right point that match x[i]-x[left]>th, x[i]-x[right]>th
+# The left/right points are boundary of this peak, then find another
+
+@numba.njit
 def findBandInRange(x,peakThreshold,start,end,minBandPts=3):    
+    """recursive method, find max peak on <x>, then recursively find left-hand side and right-hand side"""
     mxi = start + x[start:end].argmax()
     th = x[mxi]-peakThreshold
     i = mxi - 1   
@@ -11,7 +16,7 @@ def findBandInRange(x,peakThreshold,start,end,minBandPts=3):
     j = mxi + 1
     while j<end and x[j]>=th:
         j += 1
-    pl,vl = [0 for _ in range(0)],[0 for _ in range(0)]
+    pl,vl = [0 for _ in range(0)],[0 for _ in range(0)] # numba only support this weird shit
     ipl,ivl = [0 for _ in range(0)],[0 for _ in range(0)]
     jpl,jvl = [0 for _ in range(0)],[0 for _ in range(0)]
     if i<start and j==end:
@@ -24,8 +29,9 @@ def findBandInRange(x,peakThreshold,start,end,minBandPts=3):
         jpl,jvl = findBandInRange(x,peakThreshold,j,end,minBandPts)   
     return ipl+pl+jpl, ivl+vl+jvl
 
-@numba.njit()
+@numba.njit
 def findBandInRange2(x,peakThreshold):
+    """iteration method, same algorithm as `findBandInRange`"""
     stack = [[0,x.size]]
     ploc,vloc = [],[]
     while stack: 
@@ -48,12 +54,36 @@ def findBandInRange2(x,peakThreshold):
     vloc.sort()
     return ploc,vloc
 
+
+
+# @numba.njit
+def FindBandByValue(x,th):
+    """two pointer algorithm,"""
+    idmax = 0
+    xmax = x[idmax]
+    rising_edge, falling_edge = [0], []
+    maxloc = []
+    for i,d in enumerate(x):      
+        if d>xmax:
+            idmax = i
+            xmax = x[idmax]
+        if xmax-d>th:
+            if x[idmax-1]<xmax:                
+                rising = idmax
+                while x[idmax]-x[rising]<th:
+                    rising -= 1   
+                    if rising < rising_edge[-1]:
+                        break
+                else:             
+                    rising_edge.append(rising)
+                    falling_edge.append(i)
+                    maxloc.append(idmax)
+            idmax = i
+            xmax = x[idmax]
+    return rising_edge[1:],falling_edge,maxloc
+
+# main entry
 @numba.njit()
 def find_peak_value(x,th):
-    ploc,vloc = findBandInRange(x,th,0,x.size)
-    return np.array(ploc),np.array(vloc)
-
-@numba.njit()
-def get_local_maximum(x):
-    return np.array([i for i in range(1,x.size-1) if x[i]>x[i+1] and x[i]>x[i-1]])
-
+    ploc,vloc,maxloc,minloc = FindBandByValue(x,th)
+    return np.array(ploc),np.array(vloc),np.array(maxloc),np.array(minloc)

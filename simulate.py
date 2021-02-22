@@ -56,9 +56,8 @@ def bells(noise=0.1):
     x[15200:19000] = bell(3800,0.3)
     return awgn(x,None,noise)
 
-def random(noise=0.1):
-    x = np.zeros(10000)
-    n = 30
+def random(L=10000,n=30,noise=0.1):
+    x = np.zeros(L)
     for i in range(n):
         f = np.random.randint(0,10)
         if f<5:

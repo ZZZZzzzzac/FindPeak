@@ -2,7 +2,7 @@
 #include "mkl.h"
 
 #define ALIGMENT 64
-#define LEN 524288
+#define LEN 10000
 
 void cumsum(MKL_INT n, double *x){
     for (int i=1;i<n;i++){

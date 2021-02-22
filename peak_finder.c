@@ -108,11 +108,6 @@ int main() {
         printf("%d  %d\n",ploc[i],vloc[i]);
     }
 
-
-
-
-
-
     mkl_free(sp);
     return 0;
 }

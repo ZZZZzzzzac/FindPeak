@@ -1,41 +1,24 @@
-import numpy as np
-import matplotlib.pyplot as plt 
-import pandas as pd
-from scipy.signal import find_peaks
 import numba
-
-from rd import Reader
-from zacLib import nextpow2,mySmooth
-
-def rd_reader(file,nframe=1,pos=0):
-    """Read <nframe> frames from rd <file> started at <pos>-th frame."""
-    read = Reader(file)
-    fs = read.header.dump()['sampling']['sample_rate']
-    framesize = read.header.frame_size
-    return read.read(1,pos,nframe*framesize).reshape(nframe,framesize).sum(axis=0),fs
-
-def fft(signal,nfft):    
-    t1 = np.fft.fft(signal,nfft)
-    t2 = np.abs(t1)
-    t3 = np.log10(t2)[:nfft//2]
-    return t3
+import numpy as np
+import matplotlib.pyplot as plt
+from zacLib import mySmooth
 
 @numba.njit()
 def dev(x,n=1):
     """this function calculate derivative/slope x' of x.
 
     current algorithm use `(sum of right n point) - (sum of left n point)`\n    
-    i.e. : x'[i] = x[i+1:i+n+1].sum() -  x[i-n:n].sum()\n 
+    i.e. : `x'[i] = x[i+1:i+n+1].sum() -  x[i-n:n].sum()`\n 
     this algorithm is equivalent to smooth with n point flat kernel then get 
     `x'[i] = smoothed_x[i+n]-smoothed_x[i-n] `   
 
-    when n is too small, it may miss some low slope signal\n 
+    when n is too small, it may miss some low slope signal  
     when n is too large, narrow band signal may be flatten and missed
 
-    !!! Due to its implementation, the first and last n point in result are 
-        all 0, so you must ensure the peak you want are in x[n:-n].
-        To ensure that, either padding zeros before processing or take signal
-        that no peak you want is in first and last n point.
+    !!! Due to its implementation, the first and last n point in result are  
+    all 0, so you must ensure the peak you want are in x[n:-n].  
+    To ensure that, either padding zeros before processing or take signal  
+    that no peak you want is in first and last n point.
     """
     # TODO: find a more accurate and noise insensitive way to calculate slope
     y = np.zeros(x.size,dtype=x.dtype)
@@ -46,7 +29,7 @@ def dev(x,n=1):
     return y,np.concatenate((np.zeros(n//2),dcx,np.zeros(n-n//2)))/n
 
 @numba.njit((numba.float64[::1],numba.float64,numba.float64))
-def get_edge(x,th,thp):
+def FindPeakBySlope(x,th,thp):
     """Get rising/falling edge in slope <x> that above threshold <th>.
 
     Iterate along x once, so it is O(n). \n 
@@ -82,8 +65,6 @@ def get_edge(x,th,thp):
     Returns:
         rising_edge,falling_edge <np.array(int)>: location of corresponding rising/falling edge, 
                                            should have same length
-
-    !!! this algorithm runs very slow in python due to iteration, but should be fast in C !!!
     """
     ploc,vloc=[],[]
     maxPeak,minPeak = 0,0
@@ -189,10 +170,11 @@ def plot_all(sp,sm,dsp,slope_th,rising_edge,falling_edge,avg_frq,
              max_frq,dev_band,half_left,half_right,f=1,origin=None):    
     """Plot spectrum, its slope and corresponding edge/band/frequency"""
     f_axis = np.arange(sm.size)*f
-    plt.figure()
+    plt.figure(figsize=(15,12))
     ax1 = plt.subplot(211)
     if origin is not None:
         plt.plot(origin,label='origin')
+    plt.title("find peak result")
     plt.plot(sp,'.',markersize=0.5,label='Raw') # if sp.size>1e7, plot sp as scatter will be very slow
     plt.plot(f_axis,sm,label='Smoothed')
     plt.plot(rising_edge*f,sm[rising_edge],'r^',label='rising')
@@ -203,6 +185,7 @@ def plot_all(sp,sm,dsp,slope_th,rising_edge,falling_edge,avg_frq,
     plt.plot(max_frq*f,sm[max_frq],'s',label='max_peak')
     plt.legend(loc='right')
     plt.subplot(212,sharex=ax1)
+    plt.title("slope")
     plt.plot(f_axis,dsp)
     plt.plot(f_axis,np.ones(sm.size)*slope_th,'--')
     plt.plot(f_axis,np.ones(sm.size)*-slope_th,'--')
@@ -217,25 +200,9 @@ def find_peak_slope(sp,width,slope_th):
     # sp = np.concatenate([np.ones(width)*sp[0],sp,np.ones(width)*sp[-1]])
     # sm = mySmooth(sp,width,n=1) # n control shape of smooth kernel (lager n, kernel is more like gaussian(bell) shape)
     dsp,sm = dev(sp,width) # calculate derivative/slope
-    rising_edge,falling_edge = get_edge(dsp,slope_th,slope_th/3) 
+    rising_edge,falling_edge = FindPeakBySlope(dsp,slope_th,slope_th/3) 
     avg_frq,max_frq,dev_band,half_left,half_right,half_band = sample2frequency(sm,rising_edge,falling_edge)
     return sm,dsp,rising_edge,falling_edge,avg_frq,max_frq,dev_band,half_left,half_right,half_band
 
-def find_peak_slope_from_rd(file,width,slope_th,nframe=10,pos=10):
-    """Main Entry, read rd data from <file>, do find_peak_slope(data,width,slope_th) then plot result"""
-    signal,fs = rd_reader(file,nframe=10,pos=10) # Import data
-    nfft = nextpow2(signal.shape[0],n=0) 
-    sp = fft(signal,nfft) # get spectrum (fft)
-
-    # Main function find_peak_slope
-    (sm,dsp,rising_edge,falling_edge,avg_frq,max_frq,
-     dev_band,half_left,half_right,half_band) = find_peak_slope(sp,width,slope_th)
-
-    # result representation
-    # f = 1/nfft*2*fs/1e6 # using frequency as x-axis
-    f = 1 # using sample points as x-axis
-    plot_all(sp,sm,dsp,slope_th,rising_edge,falling_edge,avg_frq,max_frq,dev_band,half_left,half_right,f)
-    df = pd.DataFrame({ 'avg_frq':avg_frq*f,'max_frq':max_frq*f,'slope band':dev_band*f,'half_band':half_band*f})
-    return df
 
 
