@@ -26,7 +26,7 @@ plt.show()
 ![svg](find_peak_files/find_peak_2_0.svg)
 
 
-## Algorithm 1:  Find peak by slope
+## Algorithm 1:  Find peak by slope  ---  `O(n)`
 First smooth input signal, then calculate its slope and find where `slope > slope_th`, finally find rising/falling edge by these slope 
 
 
@@ -51,7 +51,7 @@ find_peak_slope.plot_all(sp,sm,dsp,slope_th,rising_edge,falling_edge,avg_frq,max
 ![svg](find_peak_files/find_peak_4_1.svg)
 
 
-## Algorithm 2: Find peak by threshold
+## Algorithm 2: Find peak by threshold --- `O(n)`
 find a peak at some location `i` on signal  `x`, then find nearest left/right point that match `x[i]-x[left]>th, x[i]-x[right]>th`  
 The left/right points are boundary of this peak, remove it and find next peak on remain signal  
 
@@ -135,7 +135,7 @@ print(f"Average elaspe time in pure C: {avg_c_time :.4f} us")
     Average elaspe time in pure C: 20.4286 us
     
 
-## Algorithm 3: Find peak by prominence  
+## Algorithm 3: Find peak by prominence --- `O(n^2)`
 find peaks that their `prominence > threshold`, The [prominence](https://www.mathworks.com/help/signal/ug/prominence.html) of a peak measures how much the peak stands out due to its intrinsic height and its location relative to other peaks.
 
 
